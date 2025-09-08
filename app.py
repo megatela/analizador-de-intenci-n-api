@@ -1,4 +1,3 @@
-# Nombre del archivo: app.py (Versión 2 - Más Robusta)
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import requests
@@ -11,7 +10,7 @@ app = Flask(__name__)
 CORS(app)
 
 def analyze_url_logic(url, soup, text_content):
-    # ... (Esta parte es idéntica a la anterior) ...
+    # ... (Esta parte es idéntica) ...
     words = re.findall(r'\b\w{4,15}\b', text_content.lower())
     stop_words = set(['para', 'como', 'sobre', 'desde', 'hasta', 'este', 'esta', 'estos', 'estas', 'pero', 'porque', 'con', 'que', 'del', 'los', 'las', 'más', 'ser', 'por', 'son'])
     meaningful_words = [word for word in words if word not in stop_words]
@@ -49,18 +48,31 @@ def analyze_url_logic(url, soup, text_content):
 
 @app.route('/analyze', methods=['GET'])
 def analyze():
+    url_to_analyze = request.args.get('url')
+    if not url_to_analyze:
+        return jsonify({"error": "No se proporcionó una URL."}), 400
+    
+    # === BLOQUE DE SEGURIDAD MEJORADO ===
     try:
-        url_to_analyze = request.args.get('url')
-        if not url_to_analyze: return jsonify({"error": "No se proporcionó una URL."}), 400
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
-        # === CAMBIO IMPORTANTE: AUMENTAMOS EL TIEMPO DE ESPERA ===
-        response = requests.get(url_to_analyze, headers=headers, timeout=30)
-        response.raise_for_status()
+        response = requests.get(url_to_analyze, headers=headers, timeout=20)
+        response.raise_for_status() # Esto genera un error para respuestas 4xx o 5xx
+        
         soup = BeautifulSoup(response.text, 'html.parser')
-        for script_or_style in soup(["script", "style"]): script_or_style.decompose()
+        for script_or_style in soup(["script", "style"]):
+            script_or_style.decompose()
         text_content = soup.get_text(separator=' ', strip=True)
+        
         analysis_results = analyze_url_logic(url_to_analyze, soup, text_content)
         return jsonify(analysis_results)
+
+    # Captura errores específicos de conexión y timeout
+    except requests.exceptions.Timeout:
+        return jsonify({"error": "La URL tardó demasiado en responder (Timeout)."}), 504
+    except requests.exceptions.ConnectionError:
+        return jsonify({"error": "No se pudo conectar con la URL. Puede que esté caída o bloqueando la conexión."}), 502
+    except requests.exceptions.HTTPError as e:
+        return jsonify({"error": f"La URL devolvió un código de error: {e.response.status_code}"}), 500
+    # Captura cualquier otro error inesperado
     except Exception as e:
-        # Ahora este error nos dará más detalles
-        return jsonify({"error": f"Ha ocurrido un error interno al analizar la URL: {str(e)}"}), 500
+        return jsonify({"error": f"Ha ocurrido un error inesperado en el script: {str(e)}"}), 500
