@@ -1,0 +1,6 @@
+# Nombre del archivo: requirements.txt
+Flask
+Flask-Cors
+requests
+beautifulsoup4
+gunicorn
