@@ -1,4 +1,4 @@
-# Nombre del archivo: app.py
+# Nombre del archivo: app.py (Versión 2 - Más Robusta)
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import requests
@@ -11,8 +11,7 @@ app = Flask(__name__)
 CORS(app)
 
 def analyze_url_logic(url, soup, text_content):
-    # ... (Aquí va toda la lógica de análisis que ya teníamos) ...
-    # (Es el mismo código de la versión reforzada)
+    # ... (Esta parte es idéntica a la anterior) ...
     words = re.findall(r'\b\w{4,15}\b', text_content.lower())
     stop_words = set(['para', 'como', 'sobre', 'desde', 'hasta', 'este', 'esta', 'estos', 'estas', 'pero', 'porque', 'con', 'que', 'del', 'los', 'las', 'más', 'ser', 'por', 'son'])
     meaningful_words = [word for word in words if word not in stop_words]
@@ -54,7 +53,8 @@ def analyze():
         url_to_analyze = request.args.get('url')
         if not url_to_analyze: return jsonify({"error": "No se proporcionó una URL."}), 400
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
-        response = requests.get(url_to_analyze, headers=headers, timeout=15)
+        # === CAMBIO IMPORTANTE: AUMENTAMOS EL TIEMPO DE ESPERA ===
+        response = requests.get(url_to_analyze, headers=headers, timeout=30)
         response.raise_for_status()
         soup = BeautifulSoup(response.text, 'html.parser')
         for script_or_style in soup(["script", "style"]): script_or_style.decompose()
@@ -62,4 +62,5 @@ def analyze():
         analysis_results = analyze_url_logic(url_to_analyze, soup, text_content)
         return jsonify(analysis_results)
     except Exception as e:
-        return jsonify({"error": f"Ha ocurrido un error interno en el script de Python: {str(e)}"}), 500
+        # Ahora este error nos dará más detalles
+        return jsonify({"error": f"Ha ocurrido un error interno al analizar la URL: {str(e)}"}), 500
