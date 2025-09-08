@@ -1,16 +1,20 @@
 from flask import Flask, request, jsonify
-from flask_cors import CORS
-import requests
+import httpx
 from bs4 import BeautifulSoup
-from collections import Counter
 import re
+from collections import Counter
 from urllib.parse import urlparse
 
 app = Flask(__name__)
-CORS(app)
 
+@app.after_request
+def after_request(response):
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    return response
+
+# ... (La lógica de análisis es la misma)
 def analyze_url_logic(url, soup, text_content):
-    # ... (Esta parte es idéntica) ...
+    # ... (Copia aquí toda la función analyze_url_logic del código anterior, no cambia)
     words = re.findall(r'\b\w{4,15}\b', text_content.lower())
     stop_words = set(['para', 'como', 'sobre', 'desde', 'hasta', 'este', 'esta', 'estos', 'estas', 'pero', 'porque', 'con', 'que', 'del', 'los', 'las', 'más', 'ser', 'por', 'son'])
     meaningful_words = [word for word in words if word not in stop_words]
@@ -43,21 +47,24 @@ def analyze_url_logic(url, soup, text_content):
         "meta_title": meta_title, "meta_description": meta_desc, "url_friendliness": url_friendliness, "h1": h1,
         "keyword_in_h1": f"{keyword_in_h1} (Palabra clave: '{main_keyword}')", "h2s": ", ".join(h2s) if h2s else 'Ninguno',
         "image_optimization": image_optimization, "structured_data": structured_data,
-        "core_web_vitals": "Requiere API de PageSpeed para datos reales (LCP, FID, CLS)."
+        "core_web_itals": "Requiere API de PageSpeed para datos reales (LCP, FID, CLS)."
     }
 
-@app.route('/analyze', methods=['GET'])
+
+@app.route('/analyze')
 def analyze():
     url_to_analyze = request.args.get('url')
     if not url_to_analyze:
         return jsonify({"error": "No se proporcionó una URL."}), 400
     
-    # === BLOQUE DE SEGURIDAD MEJORADO ===
     try:
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
-        response = requests.get(url_to_analyze, headers=headers, timeout=20)
-        response.raise_for_status() # Esto genera un error para respuestas 4xx o 5xx
         
+        # Usamos httpx en lugar de requests
+        with httpx.Client(headers=headers, timeout=30, follow_redirects=True) as client:
+            response = client.get(url_to_analyze)
+            response.raise_for_status()
+
         soup = BeautifulSoup(response.text, 'html.parser')
         for script_or_style in soup(["script", "style"]):
             script_or_style.decompose()
@@ -66,13 +73,11 @@ def analyze():
         analysis_results = analyze_url_logic(url_to_analyze, soup, text_content)
         return jsonify(analysis_results)
 
-    # Captura errores específicos de conexión y timeout
-    except requests.exceptions.Timeout:
+    except httpx.TimeoutException:
         return jsonify({"error": "La URL tardó demasiado en responder (Timeout)."}), 504
-    except requests.exceptions.ConnectionError:
+    except httpx.ConnectError:
         return jsonify({"error": "No se pudo conectar con la URL. Puede que esté caída o bloqueando la conexión."}), 502
-    except requests.exceptions.HTTPError as e:
+    except httpx.HTTPStatusError as e:
         return jsonify({"error": f"La URL devolvió un código de error: {e.response.status_code}"}), 500
-    # Captura cualquier otro error inesperado
     except Exception as e:
-        return jsonify({"error": f"Ha ocurrido un error inesperado en el script: {str(e)}"}), 500
+        return jsonify({"error": f"Error interno: {str(e)}"}), 500
